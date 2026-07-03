@@ -152,7 +152,7 @@ function hitChance(range){
   const A=0.95/(1+Math.exp(-2*(d-W.drop)));
   return Math.max(0,1-A-0.003*d);
 }
-function rangeTo(x,y){ return Math.floor(Math.hypot(x-enemy.x,y-enemy.y)); }
+function rangeTo(x,y){ return Math.ceil(Math.hypot(x-enemy.x,y-enemy.y)); }
 
 const STOPS=[[0,[122,30,30]],[.15,[224,65,62]],[.40,[232,145,58]],
              [.70,[232,209,58]],[.90,[127,206,79]],[1,[63,191,111]]];
