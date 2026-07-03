@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWC Range &amp; Damage Plotter</title>
+<style>
+  :root{
+    --bg:#0d1015; --panel:#141922; --panel2:#111621; --line:#212936; --muted:#6b7788;
+    --ink:#e7ebf2; --amber:#ffb020; --reticle:#ff5747;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    padding:22px 14px 48px;
+  }
+  .wrap{max-width:600px;margin:0 auto}
+  header{margin-bottom:6px}
+  h1{
+    font-size:18px;font-weight:700;letter-spacing:.4px;margin:0;
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  }
+  h1 .tag{
+    font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;
+    color:var(--amber);border:1px solid var(--amber);
+    padding:3px 6px;border-radius:4px;letter-spacing:1px;opacity:.85;
+  }
+  .sub{font-size:12.5px;color:var(--muted);margin:5px 0 0}
+  .sub b{color:#c3c9d6;font-weight:600}
+
+  label.fld{display:block;margin-top:16px}
+  label.fld .lab{font:600 10px/1 ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.9px;text-transform:uppercase;display:block;margin-bottom:6px}
+  select,input[type=number]{
+    width:100%;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;padding:11px 12px;
+    font:600 14px/1 ui-sans-serif,system-ui;-webkit-appearance:none;appearance:none;
+  }
+  select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 18px) 18px,calc(100% - 13px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px}
+  select:focus,input:focus{outline:none;border-color:var(--amber)}
+
+  .board-shell{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:12px;margin-top:14px;
+  }
+  canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;border-radius:6px}
+  .status{display:flex;align-items:center;gap:8px;margin-top:11px;font:600 12px/1.35 ui-sans-serif,system-ui;color:var(--muted)}
+  .status .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
+  .status.armed{color:var(--amber)}
+  .status.armed .dot{background:var(--amber);box-shadow:0 0 0 3px rgba(255,176,32,.18)}
+  .readout{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:12px;background:var(--line);border-radius:8px;overflow:hidden}
+  .readout div{background:var(--panel);padding:9px 11px}
+  .readout .k{font:600 10px/1 ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.8px;text-transform:uppercase}
+  .readout .v{font:600 17px/1.3 ui-monospace,Menlo,monospace;margin-top:5px}
+  .readout .v.hit{color:var(--amber)}
+
+  .legend{margin-top:16px}
+  .legbar{height:12px;border-radius:6px;background:linear-gradient(90deg,#7a1e1e,#e0413e 15%,#e8913a 40%,#e8d13a 70%,#7fce4f 90%,#3fbf6f)}
+  .legrow{display:flex;justify-content:space-between;margin-top:6px;font:600 10px/1 ui-monospace,Menlo,monospace;color:var(--muted)}
+
+  .sectitle{font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+  .sectitle::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:10px;overflow:hidden}
+  .stats .cell{background:var(--panel);padding:11px 12px}
+  .stats .k{font:600 9.5px/1 ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.8px;text-transform:uppercase}
+  .stats .v{font:700 16px/1.2 ui-monospace,Menlo,monospace;margin-top:6px}
+  .melee-note{font-size:11.5px;color:var(--amber);margin-top:10px;line-height:1.5;display:none}
+
+  .calc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 14px 16px;margin-top:12px}
+  .calc .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .calc label.fld{margin-top:0}
+  .dmgout{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:10px;overflow:hidden;margin-top:16px}
+  .dmgout .cell{background:var(--panel2);padding:12px}
+  .dmgout .k{font:600 9.5px/1 ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.8px;text-transform:uppercase}
+  .dmgout .v{font:700 18px/1.15 ui-monospace,Menlo,monospace;margin-top:6px;color:var(--amber)}
+  .dmgout .v small{font-size:11px;color:var(--muted);font-weight:600}
+  .calc .foot{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span id="wpnName">Nightstinger</span> <span class="tag" id="tag">OPT 13 &middot; DROP 3.5</span></h1>
+    <p class="sub">Pick a weapon to load its optimum range and drop-off. The grid maps hit chance by distance; tap a square to inspect, or tap the reticle then a destination to move the enemy.</p>
+  </header>
+
+  <label class="fld">
+    <span class="lab">Weapon</span>
+    <select id="weapon"></select>
+  </label>
+
+  <div class="board-shell">
+    <canvas id="board"></canvas>
+    <div class="status" id="status"><span class="dot"></span><span id="statusTxt">Tap a square to inspect it</span></div>
+    <div class="readout">
+      <div><div class="k">Cell</div><div class="v" id="oCell">&mdash;</div></div>
+      <div><div class="k">Range</div><div class="v" id="oRange">&mdash;</div></div>
+      <div><div class="k">Hit chance</div><div class="v hit" id="oHit">&mdash;</div></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legbar"></div>
+    <div class="legrow"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+  </div>
+
+  <div class="sectitle">Weapon stats</div>
+  <div class="stats">
+    <div class="cell"><div class="k">Optimum</div><div class="v" id="sOpt">&mdash;</div></div>
+    <div class="cell"><div class="k">Drop-off</div><div class="v" id="sDrop">&mdash;</div></div>
+    <div class="cell"><div class="k">Hits / round</div><div class="v" id="sHits">&mdash;</div></div>
+    <div class="cell"><div class="k">Firepower</div><div class="v" id="sFp">&mdash;</div></div>
+    <div class="cell"><div class="k">Min damage</div><div class="v" id="sMin">&mdash;</div></div>
+    <div class="cell"><div class="k">Max damage</div><div class="v" id="sMax">&mdash;</div></div>
+  </div>
+  <p class="melee-note" id="meleeNote">Melee weapon &mdash; in-game this can only hit a target at Range 0 (same location), regardless of the curve shown above.</p>
+
+  <div class="sectitle">Damage calculator</div>
+  <div class="calc">
+    <div class="row">
+      <label class="fld">
+        <span class="lab">Weapon skill (0&ndash;5)</span>
+        <input type="number" id="skill" min="0" max="5" step="1" value="2">
+      </label>
+      <label class="fld">
+        <span class="lab">Target armor</span>
+        <input type="number" id="armor" min="0" step="1" value="0">
+      </label>
+    </div>
+    <div class="dmgout">
+      <div class="cell"><div class="k">Damage / hit</div><div class="v" id="dHit">&mdash;</div></div>
+      <div class="cell"><div class="k">Damage / round</div><div class="v" id="dRound">&mdash;</div></div>
+      <div class="cell"><div class="k">Critical</div><div class="v" id="dCrit">&mdash;</div></div>
+    </div>
+    <p class="foot">Damage roll is scaled by <b>1 + skill/10</b> and clamped to the listed max, then reduced by armor via <b>f / (f + p)</b>. Round total assumes every hit lands. Crit chance is <b>(skill &minus; 1)%</b> for 1.5&times; max damage.</p>
+  </div>
+</div>
+
+<script>
+const WEAPONS = [{"name":"6-2Aug2 Hunting Rifle","cat":"Projectile","opt":6,"drop":4.496,"hits":1,"fp":16,"dmin":7,"dmax":15,"maxround":15},{"name":"A280","cat":"Projectile","opt":9,"drop":4.496,"hits":1,"fp":20,"dmin":45,"dmax":65,"maxround":65},{"name":"A295","cat":"Projectile","opt":7,"drop":4.496,"hits":6,"fp":12,"dmin":3,"dmax":7,"maxround":42},{"name":"Amban Sniper Rifle","cat":"Projectile","opt":13,"drop":4.496,"hits":1,"fp":15,"dmin":30,"dmax":60,"maxround":60},{"name":"AXM-50","cat":"Projectile","opt":4,"drop":4.496,"hits":5,"fp":9,"dmin":3,"dmax":7,"maxround":35},{"name":"B22","cat":"Projectile","opt":2,"drop":4.496,"hits":6,"fp":10,"dmin":3,"dmax":6,"maxround":36},{"name":"Beskar Vambrace","cat":"Projectile","opt":1,"drop":2.503,"hits":10,"fp":15,"dmin":2,"dmax":5,"maxround":50},{"name":"Bowcaster","cat":"Projectile","opt":5,"drop":4.496,"hits":3,"fp":13,"dmin":10,"dmax":15,"maxround":45},{"name":"Bryar Pistol","cat":"Projectile","opt":2,"drop":4.496,"hits":5,"fp":7,"dmin":4,"dmax":6,"maxround":30},{"name":"Bryar Rifle","cat":"Projectile","opt":3,"drop":4.496,"hits":5,"fp":11,"dmin":5,"dmax":8,"maxround":40},{"name":"BT 500","cat":"Projectile","opt":4,"drop":4.496,"hits":6,"fp":12,"dmin":2,"dmax":7,"maxround":42},{"name":"C-M Frag Storm Heavy Shotgun","cat":"Projectile","opt":1,"drop":4.496,"hits":2,"fp":18,"dmin":15,"dmax":30,"maxround":60},{"name":"Chakram","cat":"Projectile","opt":1,"drop":4.496,"hits":12,"fp":18,"dmin":2,"dmax":5,"maxround":60},{"name":"DC-15A Blaster Rifle","cat":"Projectile","opt":9,"drop":4.496,"hits":3,"fp":24,"dmin":15,"dmax":23,"maxround":69},{"name":"DC-15S Blaster Carbine","cat":"Projectile","opt":3,"drop":3.5,"hits":5,"fp":24,"dmin":8,"dmax":13,"maxround":65},{"name":"DD6","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":6,"dmin":4,"dmax":9,"maxround":27},{"name":"DDC Defender","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":11,"dmin":4,"dmax":13,"maxround":39},{"name":"Deck Sweeper Stun Blaster","cat":"Projectile","opt":1,"drop":4.496,"hits":2,"fp":18,"dmin":15,"dmax":30,"maxround":60},{"name":"DH-17","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":13,"dmin":3,"dmax":15,"maxround":45},{"name":"DL-18","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":8,"dmin":5,"dmax":11,"maxround":33},{"name":"DL-44","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":12,"dmin":7,"dmax":14,"maxround":42},{"name":"DL-56","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":10,"dmin":6,"dmax":12,"maxround":36},{"name":"DLT-20a","cat":"Projectile","opt":4,"drop":4.496,"hits":5,"fp":17,"dmin":6,"dmax":11,"maxround":55},{"name":"Dressellian Projectile Rifle","cat":"Projectile","opt":3,"drop":4.496,"hits":2,"fp":12,"dmin":3,"dmax":10,"maxround":20},{"name":"DT-12","cat":"Projectile","opt":3,"drop":4.496,"hits":3,"fp":8,"dmin":7,"dmax":11,"maxround":33},{"name":"DY-225","cat":"Projectile","opt":4,"drop":4.496,"hits":4,"fp":11,"dmin":4,"dmax":10,"maxround":40},{"name":"E-11","cat":"Projectile","opt":5,"drop":4.496,"hits":5,"fp":15,"dmin":2,"dmax":10,"maxround":50},{"name":"E-11B Trooper Rifle","cat":"Projectile","opt":5,"drop":4.496,"hits":4,"fp":14,"dmin":5,"dmax":12,"maxround":48},{"name":"E-5 Droid Blaster","cat":"Projectile","opt":4,"drop":4.496,"hits":5,"fp":15,"dmin":3,"dmax":10,"maxround":50},{"name":"EE-3","cat":"Projectile","opt":4,"drop":4.496,"hits":7,"fp":15,"dmin":3,"dmax":7,"maxround":49},{"name":"ELG-3A","cat":"Projectile","opt":2,"drop":4.496,"hits":4,"fp":18,"dmin":10,"dmax":15,"maxround":60},{"name":"Flamethrower","cat":"Projectile","opt":1,"drop":4.496,"hits":15,"fp":13,"dmin":1,"dmax":3,"maxround":45},{"name":"HB-1","cat":"Projectile","opt":2,"drop":4.496,"hits":4,"fp":14,"dmin":7,"dmax":12,"maxround":48},{"name":"HB-5","cat":"Projectile","opt":5,"drop":4.496,"hits":5,"fp":17,"dmin":7,"dmax":11,"maxround":55},{"name":"HSB-200 hold-out blaster pistol","cat":"Projectile","opt":1,"drop":4.496,"hits":5,"fp":13,"dmin":5,"dmax":9,"maxround":45},{"name":"Imperial Munitions 22T4","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":16,"dmin":6,"dmax":18,"maxround":54},{"name":"Jawa Ionisation Blaster","cat":"Projectile","opt":2,"drop":4.496,"hits":2,"fp":15,"dmin":5,"dmax":18,"maxround":36},{"name":"LJ-90 BlasTech","cat":"Projectile","opt":5,"drop":4.496,"hits":4,"fp":13,"dmin":5,"dmax":11,"maxround":44},{"name":"MG-15 Carbine","cat":"Projectile","opt":6,"drop":4.496,"hits":5,"fp":13,"dmin":3,"dmax":9,"maxround":45},{"name":"MK Sniper Rifle","cat":"Projectile","opt":13,"drop":4.003,"hits":1,"fp":34,"dmin":55,"dmax":85,"maxround":85},{"name":"Nightstinger","cat":"Projectile","opt":13,"drop":3.5,"hits":1,"fp":24,"dmin":50,"dmax":85,"maxround":85},{"name":"Relby K-23","cat":"Projectile","opt":2,"drop":4.496,"hits":4,"fp":14,"dmin":9,"dmax":12,"maxround":48},{"name":"Scout Blaster","cat":"Projectile","opt":1,"drop":4.496,"hits":5,"fp":13,"dmin":4,"dmax":9,"maxround":45},{"name":"SE-14 Blaster Pistol","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":1,"dmin":2,"dmax":5,"maxround":15},{"name":"T-21 Light Repeating Blaster","cat":"Projectile","opt":5,"drop":4.496,"hits":9,"fp":13,"dmin":3,"dmax":5,"maxround":45},{"name":"TB-1a Ionisation Blaster","cat":"Projectile","opt":2,"drop":4.496,"hits":3,"fp":18,"dmin":8,"dmax":16,"maxround":48},{"name":"Telltrig-7","cat":"Projectile","opt":1,"drop":4.496,"hits":4,"fp":8,"dmin":3,"dmax":8,"maxround":32},{"name":"Valken-38 Carbine","cat":"Projectile","opt":6,"drop":4.496,"hits":5,"fp":15,"dmin":4,"dmax":10,"maxround":50},{"name":"W-2X Wrist Caster","cat":"Projectile","opt":2,"drop":4.496,"hits":5,"fp":9,"dmin":3,"dmax":7,"maxround":35},{"name":"WESTAR-34 Blaster Pistol","cat":"Projectile","opt":2,"drop":4.003,"hits":8,"fp":20,"dmin":5,"dmax":7,"maxround":56},{"name":"X-45 Sniper Rifle","cat":"Projectile","opt":13,"drop":4.003,"hits":1,"fp":24,"dmin":45,"dmax":85,"maxround":85},{"name":"Zenji Needles","cat":"Projectile","opt":1,"drop":4.496,"hits":12,"fp":9,"dmin":1,"dmax":3,"maxround":36},{"name":"C4-CZN","cat":"Heavy","opt":8,"drop":4.496,"hits":20,"fp":1,"dmin":2,"dmax":4,"maxround":80},{"name":"CVI Rotating Heavy Cannon","cat":"Heavy","opt":7,"drop":4.496,"hits":8,"fp":1,"dmin":5,"dmax":10,"maxround":80},{"name":"E-Web Blaster","cat":"Heavy","opt":7,"drop":4.496,"hits":20,"fp":1,"dmin":1,"dmax":4,"maxround":80},{"name":"G-40","cat":"Heavy","opt":7,"drop":4.496,"hits":16,"fp":1,"dmin":2,"dmax":5,"maxround":80},{"name":"HB-11","cat":"Heavy","opt":8,"drop":4.496,"hits":13,"fp":1,"dmin":3,"dmax":6,"maxround":78},{"name":"K-43","cat":"Heavy","opt":7,"drop":4.496,"hits":2,"fp":1,"dmin":15,"dmax":30,"maxround":60},{"name":"Merr-Sonn Mark II","cat":"Heavy","opt":7,"drop":4.496,"hits":16,"fp":1,"dmin":2,"dmax":5,"maxround":80},{"name":"MiniMag PTL Missile Launcher","cat":"Heavy","opt":8,"drop":4.496,"hits":2,"fp":1,"dmin":2,"dmax":33,"maxround":66},{"name":"NZ 9118","cat":"Heavy","opt":5,"drop":4.496,"hits":7,"fp":1,"dmin":4,"dmax":10,"maxround":70},{"name":"RPS-6 Rocket Launcher","cat":"Heavy","opt":7,"drop":4.496,"hits":3,"fp":1,"dmin":17,"dmax":23,"maxround":69},{"name":"Stouker Concussion Rifle","cat":"Heavy","opt":5,"drop":4.496,"hits":5,"fp":1,"dmin":10,"dmax":14,"maxround":70},{"name":"TTT-54 - Thumper","cat":"Heavy","opt":7,"drop":4.496,"hits":1,"fp":1,"dmin":2,"dmax":55,"maxround":55},{"name":"Battle Axe","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":2,"fp":18,"dmin":20,"dmax":30,"maxround":60},{"name":"BD-1 Cutter","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":3,"fp":18,"dmin":15,"dmax":20,"maxround":60},{"name":"Beskar Spear","cat":"Non-Projectile","opt":1,"drop":4.496,"hits":3,"fp":24,"dmin":15,"dmax":23,"maxround":69},{"name":"Combat Knife","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":7,"fp":15,"dmin":2,"dmax":7,"maxround":49},{"name":"CS-12 Stun Master","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":2,"fp":13,"dmin":12,"dmax":22,"maxround":44},{"name":"Double Bladed Lightsaber","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":9,"fp":29,"dmin":8,"dmax":10,"maxround":90},{"name":"Electrostaff","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":4,"fp":20,"dmin":9,"dmax":28,"maxround":112},{"name":"Force Pike","cat":"Non-Projectile","opt":1,"drop":4.496,"hits":3,"fp":21,"dmin":12,"dmax":23,"maxround":69},{"name":"Gaderffii","cat":"Non-Projectile","opt":1,"drop":4.496,"hits":2,"fp":20,"dmin":22,"dmax":33,"maxround":66},{"name":"Knife","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":5,"fp":1,"dmin":1,"dmax":3,"maxround":15},{"name":"Knucklers","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":5,"fp":15,"dmin":5,"dmax":10,"maxround":50},{"name":"Lightsaber","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":5,"fp":29,"dmin":11,"dmax":14,"maxround":70},{"name":"Mace","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":2,"fp":15,"dmin":15,"dmax":25,"maxround":50},{"name":"Petar","cat":"Non-Projectile","opt":1,"drop":4.003,"hits":3,"fp":24,"dmin":15,"dmax":21,"maxround":63},{"name":"Ryyk Blade","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":3,"fp":18,"dmin":12,"dmax":20,"maxround":60},{"name":"Saber","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":3,"fp":16,"dmin":10,"dmax":18,"maxround":54},{"name":"Shockball Glove","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":1,"fp":1,"dmin":1,"dmax":1,"maxround":1},{"name":"Staff","cat":"Non-Projectile","opt":1,"drop":4.496,"hits":2,"fp":3,"dmin":5,"dmax":11,"maxround":22},{"name":"Sword","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":3,"fp":18,"dmin":15,"dmax":20,"maxround":60},{"name":"Vibro Axe","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":2,"fp":18,"dmin":20,"dmax":30,"maxround":60},{"name":"Vibroblade","cat":"Non-Projectile","opt":0,"drop":4.496,"hits":3,"fp":20,"dmin":16,"dmax":22,"maxround":66},{"name":"Vr'gedian Tranquilizer Harpoon","cat":"Non-Projectile","opt":0,"drop":1.004,"hits":3,"fp":18,"dmin":12,"dmax":20,"maxround":60},{"name":"Whip","cat":"Non-Projectile","opt":1,"drop":4.496,"hits":9,"fp":10,"dmin":2,"dmax":6,"maxround":54},{"name":"Alpha Plus Charge","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":20,"dmin":15,"dmax":28,"maxround":28},{"name":"Blaststick","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":15,"dmin":10,"dmax":16,"maxround":16},{"name":"C-10","cat":"Explosive","opt":0,"drop":4.496,"hits":1,"fp":1,"dmin":1,"dmax":50,"maxround":50},{"name":"C-22","cat":"Explosive","opt":0,"drop":4.496,"hits":1,"fp":1,"dmin":1,"dmax":1,"maxround":1},{"name":"Class-A Thermal Detonator","cat":"Explosive","opt":0,"drop":4.496,"hits":1,"fp":24,"dmin":20,"dmax":45,"maxround":45},{"name":"EMP Grenade","cat":"Explosive","opt":0,"drop":4.496,"hits":1,"fp":1,"dmin":1,"dmax":1,"maxround":1},{"name":"Frame Charge","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":18,"dmin":20,"dmax":30,"maxround":30},{"name":"PrG-7","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":23,"dmin":40,"dmax":60,"maxround":60},{"name":"Sapper Charge","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":20,"dmin":30,"dmax":40,"maxround":40},{"name":"Sequencer Charge","cat":"Explosive","opt":1,"drop":4.496,"hits":1,"fp":21,"dmin":50,"dmax":70,"maxround":70},{"name":"Stun Grenade","cat":"Explosive","opt":0,"drop":4.496,"hits":1,"fp":1,"dmin":1,"dmax":1,"maxround":1},{"name":"Thermal Bomb","cat":"Explosive","opt":2,"drop":4.496,"hits":1,"fp":29,"dmin":40,"dmax":80,"maxround":80}];
+const N=22;
+const cv=document.getElementById("board"), ctx=cv.getContext("2d");
+let enemy={x:4,y:4}, armed=false, selected=null, hover=null;
+let dpr=Math.max(1,window.devicePixelRatio||1);
+const MARGIN=22; let cell=20;
+let W = WEAPONS.find(w=>w.name==="Nightstinger") || WEAPONS[0];
+
+function hitChance(range){
+  const d=Math.abs(W.opt-range);
+  const A=0.95/(1+Math.exp(-2*(d-W.drop)));
+  return Math.max(0,1-A-0.003*d);
+}
+function rangeTo(x,y){ return Math.floor(Math.hypot(x-enemy.x,y-enemy.y)); }
+
+const STOPS=[[0,[122,30,30]],[.15,[224,65,62]],[.40,[232,145,58]],
+             [.70,[232,209,58]],[.90,[127,206,79]],[1,[63,191,111]]];
+function heat(p){
+  for(let i=1;i<STOPS.length;i++){
+    if(p<=STOPS[i][0]){
+      const a=STOPS[i-1],b=STOPS[i],t=(p-a[0])/(b[0]-a[0]);
+      return a[1].map((v,k)=>Math.round(v+(b[1][k]-v)*t));
+    }
+  }
+  return STOPS[STOPS.length-1][1];
+}
+
+function layout(){
+  const cssW=cv.clientWidth;
+  cell=(cssW-MARGIN)/N;
+  const cssH=MARGIN+cell*N;
+  cv.style.height=cssH+"px";
+  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  draw();
+}
+function draw(){
+  const H=MARGIN+cell*N;
+  ctx.clearRect(0,0,cv.clientWidth,H);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const c=heat(hitChance(rangeTo(x,y)));
+    ctx.fillStyle="rgb("+c[0]+","+c[1]+","+c[2]+")";
+    ctx.fillRect(MARGIN+x*cell,MARGIN+y*cell,cell-1,cell-1);
+  }
+  ctx.fillStyle="#7c869a"; ctx.font="9px ui-monospace,Menlo,monospace"; ctx.textBaseline="middle";
+  for(let i=0;i<N;i++){
+    ctx.textAlign="center"; ctx.fillText(i,MARGIN+i*cell+cell/2-0.5,MARGIN/2);
+    ctx.textAlign="right";  ctx.fillText(i,MARGIN-4,MARGIN+i*cell+cell/2);
+  }
+  if(hover && !(hover.x===enemy.x&&hover.y===enemy.y)){
+    ctx.strokeStyle="rgba(255,255,255,.45)"; ctx.lineWidth=1.5;
+    ctx.strokeRect(MARGIN+hover.x*cell+0.75,MARGIN+hover.y*cell+0.75,cell-2.5,cell-2.5);
+  }
+  if(selected){
+    ctx.strokeStyle="rgba(255,255,255,.95)"; ctx.lineWidth=2;
+    ctx.strokeRect(MARGIN+selected.x*cell+0.5,MARGIN+selected.y*cell+0.5,cell-2,cell-2);
+  }
+  const ex=MARGIN+enemy.x*cell+cell/2-0.5, ey=MARGIN+enemy.y*cell+cell/2-0.5;
+  const rr=Math.min(cell*0.42,11), col=armed?"#ffb020":"#ff5747";
+  ctx.save(); ctx.translate(ex,ey);
+  if(armed){ ctx.strokeStyle="rgba(255,176,32,.55)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,rr+5,0,Math.PI*2); ctx.stroke(); }
+  ctx.strokeStyle=col; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,rr,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-rr-3,0); ctx.lineTo(rr+3,0); ctx.moveTo(0,-rr-3); ctx.lineTo(0,rr+3); ctx.stroke();
+  ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,0,2.2,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function cellAt(e){
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left-MARGIN)/cell), y=Math.floor((e.clientY-r.top-MARGIN)/cell);
+  return (x<0||y<0||x>=N||y>=N)?null:{x,y};
+}
+function isEnemy(c){ return c && c.x===enemy.x && c.y===enemy.y; }
+function setStatus(){
+  const s=document.getElementById("status"), t=document.getElementById("statusTxt");
+  s.classList.toggle("armed",armed);
+  t.textContent=armed ? "Marker armed \u2014 tap a destination (or the marker to cancel)" : "Tap a square to inspect it";
+}
+function showReadout(c){
+  const $=id=>document.getElementById(id);
+  if(!c || isEnemy(c)){ $("oCell").textContent="\u2014"; $("oRange").textContent="\u2014"; $("oHit").textContent="\u2014"; return; }
+  const r=rangeTo(c.x,c.y);
+  $("oCell").textContent=c.x+", "+c.y;
+  $("oRange").textContent=r;
+  $("oHit").textContent=(hitChance(r)*100).toFixed(1)+"%";
+}
+
+cv.addEventListener("click",e=>{
+  const c=cellAt(e); if(!c) return;
+  if(armed){ if(!isEnemy(c)){ enemy=c; selected=null; showReadout(null);} armed=false; }
+  else if(isEnemy(c)){ armed=true; }
+  else { selected=c; showReadout(c); }
+  setStatus(); draw();
+});
+cv.addEventListener("pointermove",e=>{
+  if(e.pointerType!=="mouse") return;
+  const c=cellAt(e); hover=c;
+  if(c && !isEnemy(c)) showReadout(c); else if(selected) showReadout(selected);
+  draw();
+});
+cv.addEventListener("pointerleave",()=>{ hover=null; showReadout(selected); draw(); });
+
+// ---- weapon select + stats + damage ----
+function buildSelect(){
+  const sel=document.getElementById("weapon");
+  const order=["Projectile","Heavy","Non-Projectile","Explosive"];
+  const labels={Projectile:"Projectile",Heavy:"Heavy Projectile","Non-Projectile":"Non-Projectile (melee)",Explosive:"Explosives"};
+  order.forEach(cat=>{
+    const items=WEAPONS.filter(w=>w.cat===cat).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!items.length) return;
+    const og=document.createElement("optgroup"); og.label=labels[cat];
+    items.forEach(w=>{
+      const o=document.createElement("option"); o.value=w.name; o.textContent=w.name;
+      if(w===W) o.selected=true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  sel.addEventListener("change",()=>{
+    W=WEAPONS.find(w=>w.name===sel.value);
+    document.getElementById("wpnName").textContent=W.name;
+    document.getElementById("tag").innerHTML="OPT "+W.opt+" \u00b7 DROP "+ (Math.round(W.drop*100)/100);
+    updateStats(); calcDamage(); selected=null; showReadout(null); draw();
+  });
+}
+function updateStats(){
+  const $=id=>document.getElementById(id);
+  $("sOpt").textContent=W.opt;
+  $("sDrop").textContent=(Math.round(W.drop*100)/100);
+  $("sHits").textContent=W.hits;
+  $("sFp").textContent=W.fp;
+  $("sMin").textContent=W.dmin;
+  $("sMax").textContent=W.dmax;
+  document.getElementById("meleeNote").style.display = (W.cat==="Non-Projectile") ? "block" : "none";
+}
+function calcDamage(){
+  const $=id=>document.getElementById(id);
+  let skill=parseFloat(document.getElementById("skill").value); if(isNaN(skill)) skill=0;
+  let armor=parseFloat(document.getElementById("armor").value); if(isNaN(armor)||armor<0) armor=0;
+  const mod=1+skill/10;
+  const fpFactor=W.fp/(W.fp+armor);
+  const minHit=Math.min(W.dmax, W.dmin*mod)*fpFactor;
+  const maxHit=W.dmax*fpFactor;                       // roll clamped to listed max
+  const fmt=x=>Math.round(x*10)/10;
+  $("dHit").innerHTML=fmt(minHit)+"&ndash;"+fmt(maxHit);
+  $("dRound").innerHTML=fmt(minHit*W.hits)+"&ndash;"+fmt(maxHit*W.hits)+" <small>&times;"+W.hits+"</small>";
+  const critPct=Math.max(0,skill-1);
+  const critDmg=1.5*W.dmax*fpFactor;
+  $("dCrit").innerHTML=critPct+"% <small>@ "+fmt(critDmg)+"</small>";
+}
+document.getElementById("skill").addEventListener("input",calcDamage);
+document.getElementById("armor").addEventListener("input",calcDamage);
+
+buildSelect();
+document.getElementById("wpnName").textContent=W.name;
+document.getElementById("tag").innerHTML="OPT "+W.opt+" \u00b7 DROP "+(Math.round(W.drop*100)/100);
+updateStats(); calcDamage();
+new ResizeObserver(layout).observe(cv);
+layout(); setStatus();
+</script>
+</body>
+</html>
