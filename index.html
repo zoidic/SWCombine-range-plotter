@@ -77,6 +77,11 @@
   .dmgout .v{font:700 18px/1.15 ui-monospace,Menlo,monospace;margin-top:6px;color:var(--amber)}
   .dmgout .v small{font-size:11px;color:var(--muted);font-weight:600}
   .calc .foot{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5}
+  .dw{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--ink);cursor:pointer;user-select:none}
+  .dw.disabled{opacity:.38;cursor:not-allowed}
+  .calc input[type=checkbox]{width:auto;accent-color:var(--amber)}
+  .chkfld{display:flex;align-items:center;gap:8px;padding:11px 0;font:600 13px/1 ui-sans-serif}
+  #dwFoot{color:var(--amber)}
 </style>
 </head>
 <body>
@@ -106,6 +111,26 @@
     <div class="legrow"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
   </div>
 
+  <div class="sectitle">Vision &amp; sensors</div>
+  <div class="calc">
+    <div class="row">
+      <label class="fld">
+        <span class="lab">Perception skill (0&ndash;5)</span>
+        <input type="number" id="perc" min="0" max="5" step="1" value="3">
+      </label>
+      <label class="fld">
+        <span class="lab">Macrobinoculars</span>
+        <span class="chkfld"><input type="checkbox" id="macro" checked> +5 sensor power</span>
+      </label>
+    </div>
+    <div class="dmgout">
+      <div class="cell"><div class="k">Sensor power</div><div class="v" id="vSP">&mdash;</div></div>
+      <div class="cell"><div class="k">Vision range</div><div class="v" id="vRange">&mdash;</div></div>
+      <div class="cell"><div class="k">Observer</div><div class="v" id="vAt">&mdash;</div></div>
+    </div>
+    <p class="foot">Sensor power = <b>Perception + 4</b> (+5 with macrobinoculars). A square is visible while <b>floor(SensorPower / (distance + 1)) &ge; 1</b> &mdash; i.e. <b>straight-line distance &le; SensorPower &minus; 1</b> (raw distance, <i>not</i> the floored range). <b>Tap any non-enemy square</b> to place an observer and shade its vision footprint.</p>
+  </div>
+
   <div class="sectitle">Weapon stats</div>
   <div class="stats">
     <div class="cell"><div class="k">Optimum</div><div class="v" id="sOpt">&mdash;</div></div>
@@ -129,12 +154,18 @@
         <input type="number" id="armor" min="0" step="1" value="0">
       </label>
     </div>
+    <label class="dw"><input type="checkbox" id="dual"> <span>Dual wield</span></label>
     <div class="dmgout">
       <div class="cell"><div class="k">Damage / hit</div><div class="v" id="dHit">&mdash;</div></div>
       <div class="cell"><div class="k">Damage / round</div><div class="v" id="dRound">&mdash;</div></div>
       <div class="cell"><div class="k">Critical</div><div class="v" id="dCrit">&mdash;</div></div>
     </div>
-    <p class="foot">Damage roll is scaled by <b>1 + skill/10</b> and clamped to the listed max, then reduced by armor via <b>f / (f + p)</b>. Round total assumes every hit lands. Crit chance is <b>(skill &minus; 1)%</b> for 1.5&times; max damage.</p>
+    <div class="dmgout" id="dwOut" style="display:none;margin-top:1px">
+      <div class="cell"><div class="k">Offhand / hit</div><div class="v" id="dwHit">&mdash;</div></div>
+      <div class="cell"><div class="k">Offhand / round</div><div class="v" id="dwRound">&mdash;</div></div>
+      <div class="cell"><div class="k">Combined / round</div><div class="v" id="dwComb">&mdash;</div></div>
+    </div>
+    <p class="foot">Damage roll is scaled by <b>1 + skill/10</b> and clamped to the listed max, then reduced by armor via <b>f / (f + p)</b>. Round total assumes every hit lands. Crit chance is <b>(skill &minus; 1)%</b> for 1.5&times; max damage. Dual-wield offhand is <b>50% damage &times; 50% hit chance</b>.</p>
   </div>
 </div>
 
@@ -146,13 +177,17 @@ let enemy={x:4,y:4}, armed=false, selected=null, hover=null;
 let dpr=Math.max(1,window.devicePixelRatio||1);
 const MARGIN=22; let cell=20;
 let W = WEAPONS.find(w=>w.name==="Nightstinger") || WEAPONS[0];
+// Weapons that can be dual wielded (from Projectile.md / Non-projectile.md; all Heavy & Explosive = No)
+const DUAL_OK = new Set(["B22","Beskar Vambrace","Bryar Pistol","CS-12 Stun Master","Combat Knife","DD6","DDC Defender","DH-17","DL-18","DL-44","DL-56","DT-12","ELG-3A","HB-1","HSB-200 hold-out blaster pistol","Imperial Munitions 22T4","Knife","Knucklers","Lightsaber","Petar","Relby K-23","Saber","Scout Blaster","Sword","Telltrig-7","Vibro Axe","Vibroblade","W-2X Wrist Caster","WESTAR-34 Blaster Pistol","Zenji Needles"]);
 
 function hitChance(range){
   const d=Math.abs(W.opt-range);
   const A=0.95/(1+Math.exp(-2*(d-W.drop)));
   return Math.max(0,1-A-0.003*d);
 }
-function rangeTo(x,y){ return Math.ceil(Math.hypot(x-enemy.x,y-enemy.y)); }
+function rangeTo(x,y){ return Math.floor(Math.hypot(x-enemy.x,y-enemy.y)); }
+function sensorPower(){ let p=parseInt(document.getElementById("perc").value); if(isNaN(p))p=0; p=Math.max(0,Math.min(5,p)); return p+4+(document.getElementById("macro").checked?5:0); }
+function visionRange(){ return sensorPower()-1; }   // max range with floor(SP/(range+1)) >= 1
 
 const STOPS=[[0,[122,30,30]],[.15,[224,65,62]],[.40,[232,145,58]],
              [.70,[232,209,58]],[.90,[127,206,79]],[1,[63,191,111]]];
@@ -192,6 +227,15 @@ function draw(){
     ctx.strokeStyle="rgba(255,255,255,.45)"; ctx.lineWidth=1.5;
     ctx.strokeRect(MARGIN+hover.x*cell+0.75,MARGIN+hover.y*cell+0.75,cell-2.5,cell-2.5);
   }
+  if(selected && !isEnemy(selected)){
+    const V=visionRange();               // visible while RAW distance <= SensorPower-1 (not floored)
+    for(let yy=0;yy<N;yy++)for(let xx=0;xx<N;xx++){
+      const inView=Math.hypot(xx-selected.x,yy-selected.y)<=V;
+      // dim tiles outside vision (fog), lightly brighten tiles inside
+      ctx.fillStyle=inView?"rgba(255,255,255,.15)":"rgba(0,0,0,.5)";
+      ctx.fillRect(MARGIN+xx*cell,MARGIN+yy*cell,cell-1,cell-1);
+    }
+  }
   if(selected){
     ctx.strokeStyle="rgba(255,255,255,.95)"; ctx.lineWidth=2;
     ctx.strokeRect(MARGIN+selected.x*cell+0.5,MARGIN+selected.y*cell+0.5,cell-2,cell-2);
@@ -225,13 +269,19 @@ function showReadout(c){
   $("oRange").textContent=r;
   $("oHit").textContent=(hitChance(r)*100).toFixed(1)+"%";
 }
+function updateVision(){
+  const $=id=>document.getElementById(id);
+  $("vSP").textContent=sensorPower();
+  $("vRange").textContent=visionRange();
+  $("vAt").textContent=(selected&&!isEnemy(selected))?(selected.x+", "+selected.y):"—";
+}
 
 cv.addEventListener("click",e=>{
   const c=cellAt(e); if(!c) return;
   if(armed){ if(!isEnemy(c)){ enemy=c; selected=null; showReadout(null);} armed=false; }
   else if(isEnemy(c)){ armed=true; }
   else { selected=c; showReadout(c); }
-  setStatus(); draw();
+  setStatus(); updateVision(); draw();
 });
 cv.addEventListener("pointermove",e=>{
   if(e.pointerType!=="mouse") return;
@@ -261,7 +311,7 @@ function buildSelect(){
     W=WEAPONS.find(w=>w.name===sel.value);
     document.getElementById("wpnName").textContent=W.name;
     document.getElementById("tag").innerHTML="OPT "+W.opt+" \u00b7 DROP "+ (Math.round(W.drop*100)/100);
-    updateStats(); calcDamage(); selected=null; showReadout(null); draw();
+    updateStats(); updateDualState(); selected=null; showReadout(null); updateVision(); draw();
   });
 }
 function updateStats(){
@@ -288,14 +338,37 @@ function calcDamage(){
   const critPct=Math.max(0,skill-1);
   const critDmg=1.5*W.dmax*fpFactor;
   $("dCrit").innerHTML=critPct+"% <small>@ "+fmt(critDmg)+"</small>";
+  // dual wield: offhand copy at 50% damage and 50% hit chance
+  const dual=document.getElementById("dual"), dwOut=$("dwOut");
+  if(dual && dual.checked && !dual.disabled){
+    const offMin=0.5*minHit, offMax=0.5*maxHit;                 // per-hit at 50% damage
+    const offRoundMin=offMin*W.hits*0.5, offRoundMax=offMax*W.hits*0.5; // ×0.5 hit chance (expected)
+    const totMin=minHit*W.hits+offRoundMin, totMax=maxHit*W.hits+offRoundMax;
+    $("dwHit").innerHTML=fmt(offMin)+"&ndash;"+fmt(offMax);
+    $("dwRound").innerHTML=fmt(offRoundMin)+"&ndash;"+fmt(offRoundMax);
+    $("dwComb").innerHTML=fmt(totMin)+"&ndash;"+fmt(totMax);
+    dwOut.style.display="grid";
+  } else if(dwOut){ dwOut.style.display="none"; }
+}
+function updateDualState(){
+  const dual=document.getElementById("dual"), lab=document.querySelector(".dw");
+  const ok=DUAL_OK.has(W.name);
+  dual.disabled=!ok;
+  lab.classList.toggle("disabled",!ok);
+  lab.title=ok?"":"This weapon cannot be dual wielded";
+  if(!ok) dual.checked=false;
+  calcDamage();
 }
 document.getElementById("skill").addEventListener("input",calcDamage);
 document.getElementById("armor").addEventListener("input",calcDamage);
+document.getElementById("dual").addEventListener("change",calcDamage);
+document.getElementById("perc").addEventListener("input",()=>{updateVision();draw();});
+document.getElementById("macro").addEventListener("change",()=>{updateVision();draw();});
 
 buildSelect();
 document.getElementById("wpnName").textContent=W.name;
 document.getElementById("tag").innerHTML="OPT "+W.opt+" \u00b7 DROP "+(Math.round(W.drop*100)/100);
-updateStats(); calcDamage();
+updateStats(); updateDualState(); updateVision();
 new ResizeObserver(layout).observe(cv);
 layout(); setStatus();
 </script>
